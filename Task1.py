@@ -5,6 +5,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import InputRequired, Length, ValidationError
 from flask_bcrypt import Bcrypt
+import re
 app = Flask(__name__)
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
@@ -19,11 +20,30 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), nullable=False, unique=True)
     password = db.Column(db.String(80), nullable=False)
+def password_check(passwd):
+        SpecialSym =['$', '@', '#', '%','.',',','*']
+        if len(passwd) < 7:
+            return 'length should be at least 8'
+            
+        if len(passwd) > 20:
+            return 'length should be not be greater than 20'
+            
+        if not any(char.isdigit() for char in passwd):
+            return 'Password should have at least one numeral'
+            
+        if not any(char.isupper() for char in passwd):
+            return 'Password should have at least one uppercase letter'
+            
+        if not any(char.islower() for char in passwd):
+            return 'Password should have at least one lowercase letter'
+            
+        if not any(char in SpecialSym for char in passwd):
+            return 'Password should have at least one of the symbols $@#'
+        return "Valid"
 
 
 class RegisterForm(FlaskForm):
@@ -32,17 +52,22 @@ class RegisterForm(FlaskForm):
     password = PasswordField(validators=[InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
 
     submit = SubmitField('Register')
-
     def validate_username(self, username):
         existing_user_username = User.query.filter_by( username=username.data).first()
         if existing_user_username:
             raise ValidationError('That username already exists. Please choose a different one.')
-
+    def validate_password(self,password):
+        result = password_check(password.data)
+        if (result == "Valid"):
+         return redirect(url_for('login'))
+        else:
+            return redirect(url_for('register'))
+    
 class LoginForm(FlaskForm):
     username = StringField(validators=[InputRequired(), Length(min=4, max=20)], render_kw={"placeholder": "Username"})
 
     password = PasswordField(validators=[ InputRequired(), Length(min=8, max=20)], render_kw={"placeholder": "Password"})
-
+    
     submit = SubmitField('Login')
 
 
@@ -59,8 +84,9 @@ def login():
         if user:
             if bcrypt.check_password_hash(user.password, form.password.data):
                 login_user(user)
-                return redirect(url_for('dashboard'))
+                return redirect(url_for('dashboard'))  
     return render_template('login.html', form=form)
+        
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -91,4 +117,4 @@ def register():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True) 
